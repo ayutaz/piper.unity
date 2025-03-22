@@ -12,7 +12,7 @@ namespace Piper
         public int sampleRate = 22050;
 
         // Piperが必要とする入力スケールなど
-        public float scaleSpeed   = 0.667f;
+        public float scaleSpeed   = 1.0f;
         public float scalePitch   = 1.0f;
         public float scaleGlottal = 0.8f;
 
@@ -22,6 +22,8 @@ namespace Piper
 
         private Model runtimeModel;
         private Worker worker;
+        
+        [SerializeField] private BackendType backendType = BackendType.GPUCompute;
 
         private void Awake()
         {
@@ -31,7 +33,7 @@ namespace Piper
 
             // 2. Sentisモデルを読み込み、Worker作成
             runtimeModel = ModelLoader.Load(modelAsset);
-            worker = new Worker(runtimeModel, BackendType.GPUCompute);
+            worker = new Worker(runtimeModel, backendType);
         }
 
         /// <summary>
