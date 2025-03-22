@@ -830,7 +830,6 @@ MonoBehaviour:
   input: {fileID: 873045195}
   submitButton: {fileID: 1290989871}
   source: {fileID: 1115823031}
-  cube: {fileID: 925685969}
 --- !u!82 &1115823031
 AudioSource:
   m_ObjectHideFlags: 0
@@ -1166,6 +1165,9 @@ MonoBehaviour:
   scaleSpeed: 1
   scalePitch: 1
   scaleGlottal: 0.8
+  espeakNgRelativePath: espeak-ng-data
+  voice: en-us
+  backendType: 512
 --- !u!1 &1795061063
 GameObject:
   m_ObjectHideFlags: 0
