@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections;
+using System.Threading.Tasks;
 
 namespace Piper
 {
@@ -10,35 +10,26 @@ namespace Piper
         public InputField input;
         public Button submitButton;
         public AudioSource source;
-        public GameObject cube;
 
-        void Awake()
+        private void Awake()
         {
             submitButton.onClick.AddListener(OnButtonPressed);
         }
 
-        void Update()
-        {
-            cube.transform.Rotate(Vector3.one * (Time.deltaTime * 10f));
-        }
-
-        private void OnButtonPressed()
+        private async void OnButtonPressed()
         {
             string text = input.text;
-            StartCoroutine(TextToSpeechAndPlay(text));
-        }
 
-        private IEnumerator TextToSpeechAndPlay(string text)
-        {
+            // 1. もしAudioSourceが再生中なら停止してクリップ破棄
             if (source.isPlaying) source.Stop();
-            if (source.clip != null) Destroy(source.clip);
+            if (source.clip) Destroy(source.clip);
 
-            // PiperManagerのコルーチンを呼び、生成完了後にAudioClipを受け取る
-            yield return piper.TextToSpeechCoroutine(text, (clip) =>
-            {
-                source.clip = clip;
-                source.Play();
-            });
+            // 2. 非同期でTTSを実行 (メインスレッド上で進行)
+            AudioClip clip = await piper.TextToSpeechAsync(text);
+
+            // 3. 再生
+            source.clip = clip;
+            source.Play();
         }
     }
 }
