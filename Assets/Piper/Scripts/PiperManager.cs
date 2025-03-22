@@ -1,88 +1,107 @@
+using UnityEngine;
+using Unity.Sentis;
+using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Unity.Sentis;
-using UnityEngine;
 
 namespace Piper
 {
     public class PiperManager : MonoBehaviour
     {
-        public BackendType backend = BackendType.GPUCompute;
-        public ModelAsset model;
-
-        public string voice = "en-us";
+        public ModelAsset modelAsset;
         public int sampleRate = 22050;
 
-        private Model _runtimeModel;
-        private IWorker _worker;
+        // Piperが必要とする入力スケールなど。Inspectorで調整可能に
+        public float scaleSpeed   = 0.667f;
+        public float scalePitch   = 1.0f;
+        public float scaleGlottal = 0.8f;
 
-        private void Awake()
+        // espeak-ngデータのあるディレクトリ
+        // (StreamingAssets/espeak-ng-data などに配置している想定)
+        public string espeakNgRelativePath = "espeak-ng-data";
+        public string voice = "en-us";
+
+        private Model runtimeModel;
+        private Worker worker;
+
+        void Awake()
         {
-            var espeakPath = Path.Combine(Application.streamingAssetsPath, "espeak-ng-data");
+            // 1. PiperWrapperを初期化（espeak-ngのデータパスを渡す）
+            string espeakPath = Path.Combine(Application.streamingAssetsPath, espeakNgRelativePath);
             PiperWrapper.InitPiper(espeakPath);
 
-            _runtimeModel = ModelLoader.Load(model);
-            _worker = WorkerFactory.CreateWorker(backend, _runtimeModel);
+            // 2. Sentisモデルを読み込み、Worker作成
+            runtimeModel = ModelLoader.Load(modelAsset);
+            worker = new Worker(runtimeModel, BackendType.CPU);
         }
 
-        public async Task<AudioClip> TextToSpeech(string text)
+        /// <summary>
+        /// コルーチンでテキストをTTSし、完了したら onComplete にAudioClipを返す
+        /// </summary>
+        public IEnumerator TextToSpeechCoroutine(string text, Action<AudioClip> onComplete)
         {
-            var sw = new System.Diagnostics.Stopwatch();
-            sw.Start();
+            // 3. テキストをPiperWrapperでフォネマイズし、文ごとの音素IDを取得
+            var phonemeResult = PiperWrapper.ProcessText(text, voice);
+            var allSamples = new List<float>();
 
-            Debug.Log("Piper Phonemize processing text...");
-            var phonemes = PiperWrapper.ProcessText(text, voice);
-            Debug.Log($"Piper Phonemize processed text: {sw.ElapsedMilliseconds} ms");
-
-            Debug.Log("Starting Piper inference...");
-            sw.Restart();
-
-            var inputLengthsShape = new TensorShape(1);
-            var scalesShape = new TensorShape(3);
-            using var scalesTensor = new TensorFloat(scalesShape, new float[] { 0.667f, 1f, 0.8f });
-
-            var audioBuffer = new List<float>();
-            for (int i = 0; i < phonemes.Sentences.Length; i++) 
+            // 4. 各文に対して推論を実行し、結果を結合
+            for (int s = 0; s < phonemeResult.Sentences.Length; s++)
             {
-                var sentence = phonemes.Sentences[i];
+                var sentence = phonemeResult.Sentences[s];
+                int[] phonemeIds = sentence.PhonemesIds;
 
-                var inputPhonemes = sentence.PhonemesIds;
-                var inputShape = new TensorShape(1, inputPhonemes.Length);
-                using var inputTensor = new TensorInt(inputShape, inputPhonemes);
-                using var inputLengthsTensor = new TensorInt(inputLengthsShape, new int[] { inputPhonemes.Length });
+                // (a) 入力テンソル作成
+                using var inputTensor = new Tensor<int>(new TensorShape(1, phonemeIds.Length), phonemeIds);
 
-                var input = new Dictionary<string, Tensor>();
-                input.Add("input", inputTensor);
-                input.Add("input_lengths", inputLengthsTensor);
-                input.Add("scales", scalesTensor);
+                using var inputLengthsTensor = new Tensor<int>(
+                    new TensorShape(1), new int[] { phonemeIds.Length });
 
-                _worker.Execute(input);
+                using var scalesTensor = new Tensor<float>(
+                    new TensorShape(3),
+                    new float[] { scaleSpeed, scalePitch, scaleGlottal }
+                );
 
-                using var outputTensor = _worker.PeekOutput() as TensorFloat;
-                await outputTensor.MakeReadableAsync();
+                // (b) モデルの入力名を合わせる
+                //     例: 0番目= "input", 1番目= "input_lengths", 2番目= "scales"
+                //     実際に runtimeModel.inputs[x].name で確認してください
+                string inputName         = runtimeModel.inputs[0].name;
+                string inputLengthsName  = runtimeModel.inputs[1].name;
+                string scalesName        = runtimeModel.inputs[2].name;
 
-                var output = outputTensor.ToReadOnlyArray();
-                audioBuffer.AddRange(output);
+                worker.SetInput(inputName,         inputTensor);
+                worker.SetInput(inputLengthsName,  inputLengthsTensor);
+                worker.SetInput(scalesName,        scalesTensor);
+
+                // (c) 推論開始
+                worker.Schedule();
+
+                // (d) フレームをまたぎながら実行してフリーズを防ぐ
+                var enumSchedule = worker.ScheduleIterable();
+                while (enumSchedule.MoveNext())
+                    yield return null;
+
+                // (e) 出力を取得
+                Tensor<float> outputTensor = worker.PeekOutput() as Tensor<float>;
+                float[] sentenceSamples = outputTensor.DownloadToArray();
+
+                // (f) 全文を一つの波形リストに追加
+                allSamples.AddRange(sentenceSamples);
             }
 
-            Debug.Log($"Finished piper inference: {sw.ElapsedMilliseconds} ms");
-            Debug.Log("Saving to audio clip...");
-            sw.Restart();
+            // 5. 結合した音声波形で AudioClip を作成
+            AudioClip clip = AudioClip.Create("PiperTTS", allSamples.Count, 1, sampleRate, false);
+            clip.SetData(allSamples.ToArray(), 0);
 
-            var audioClip = AudioClip.Create("piper_tts", audioBuffer.Count, 1, sampleRate, false);
-            audioClip.SetData(audioBuffer.ToArray(), 0);
-
-            Debug.Log($"Audio clip saved: {sw.ElapsedMilliseconds} ms");
-
-            return audioClip;
+            onComplete?.Invoke(clip);
         }
 
-        private void OnDestroy()
+        void OnDestroy()
         {
+            // PiperWrapperの解放 & Worker破棄
             PiperWrapper.FreePiper();
-            _worker.Dispose();
+            if (worker != null)
+                worker.Dispose();
         }
     }
 }

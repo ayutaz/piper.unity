@@ -1,59 +1,44 @@
-using System;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
 
-namespace Piper.Samples
+namespace Piper
 {
     public class PiperSample : MonoBehaviour
     {
         public PiperManager piper;
         public InputField input;
         public Button submitButton;
-        public Text timerText;
+        public AudioSource source;
         public GameObject cube;
 
-        private AudioSource _source;
-
-        private void Awake()
+        void Awake()
         {
-            _source = GetComponent<AudioSource>();
-            input.onSubmit.AddListener(OnInputSubmit);
             submitButton.onClick.AddListener(OnButtonPressed);
         }
 
-        private void Update()
+        void Update()
         {
             cube.transform.Rotate(Vector3.one * (Time.deltaTime * 10f));
         }
 
         private void OnButtonPressed()
         {
-            var text = input.text;
-            OnInputSubmit(text);
+            string text = input.text;
+            StartCoroutine(TextToSpeechAndPlay(text));
         }
 
-        private async void OnInputSubmit(string text)
+        private IEnumerator TextToSpeechAndPlay(string text)
         {
-            var sw = new System.Diagnostics.Stopwatch();
-            sw.Start();
+            if (source.isPlaying) source.Stop();
+            if (source.clip != null) Destroy(source.clip);
 
-            var audio = piper.TextToSpeech(text);
-            timerText.text = $"Time: {sw.ElapsedMilliseconds} ms";
-
-            _source.Stop();
-            if (_source && _source.clip)
-                Destroy(_source.clip);
-
-            _source.clip = await audio;
-            _source.Play();
-        }
-
-        private void OnDestroy()
-        {
-            if (_source && _source.clip)
-                Destroy(_source.clip);
+            // PiperManagerのコルーチンを呼び、生成完了後にAudioClipを受け取る
+            yield return piper.TextToSpeechCoroutine(text, (clip) =>
+            {
+                source.clip = clip;
+                source.Play();
+            });
         }
     }
-
 }
-
