@@ -11,6 +11,8 @@ jobs:
     runs-on: windows-latest
     env:
       UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
       UNITY_VERSION: 6000.0.43f1
 
     steps:
