@@ -9,6 +9,9 @@ jobs:
   build:
     name: Build Windows Player
     runs-on: ubuntu-latest
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_VERSION: 6000.0.43f1
 
     steps:
       - name: Checkout repository
@@ -26,9 +29,8 @@ jobs:
       # Activate Unity with the license stored in the repository secrets
       - name: Activate Unity license
         uses: game-ci/unity-activate@v2
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_VERSION: 6000.0.43f1
+        with:
+          unityVersion: 6000.0.43f1
 
       # Build the project for Windows 64-bit
       - name: Build project
