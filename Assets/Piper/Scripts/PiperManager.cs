@@ -1,5 +1,4 @@
 using UnityEngine;
-using Unity.Sentis;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -8,22 +7,23 @@ namespace Piper
 {
     public class PiperManager : MonoBehaviour
     {
-        public ModelAsset modelAsset;
+        public Unity.InferenceEngine.ModelAsset modelAsset;
         public int sampleRate = 22050;
 
         // Piperが必要とする入力スケールなど
-        public float scaleSpeed   = 1.0f;
-        public float scalePitch   = 1.0f;
+        public float scaleSpeed = 1.0f;
+        public float scalePitch = 1.0f;
         public float scaleGlottal = 0.8f;
 
         // espeak-ngのdataフォルダ
         public string espeakNgRelativePath = "espeak-ng-data";
         public string voice = "en-us";
 
-        private Model runtimeModel;
-        private Worker worker;
-        
-        [SerializeField] private BackendType backendType = BackendType.GPUCompute;
+        private Unity.InferenceEngine.Model runtimeModel;
+        private Unity.InferenceEngine.Worker worker;
+
+        [SerializeField]
+        private Unity.InferenceEngine.BackendType backendType = Unity.InferenceEngine.BackendType.GPUCompute;
 
         private void Awake()
         {
@@ -32,8 +32,8 @@ namespace Piper
             PiperWrapper.InitPiper(espeakPath);
 
             // 2. Sentisモデルを読み込み、Worker作成
-            runtimeModel = ModelLoader.Load(modelAsset);
-            worker = new Worker(runtimeModel, backendType);
+            runtimeModel = Unity.InferenceEngine.ModelLoader.Load(modelAsset);
+            worker = new Unity.InferenceEngine.Worker(runtimeModel, backendType);
         }
 
         /// <summary>
@@ -53,21 +53,25 @@ namespace Piper
                 int[] phonemeIds = sentence.PhonemesIds;
 
                 // 入力テンソル作成
-                using var inputTensor = new Tensor<int>(new TensorShape(1, phonemeIds.Length), phonemeIds);
-                using var inputLengthsTensor = new Tensor<int>(new TensorShape(1), new int[] { phonemeIds.Length });
-                using var scalesTensor = new Tensor<float>(
-                    new TensorShape(3),
+                using var inputTensor =
+                    new Unity.InferenceEngine.Tensor<int>(new Unity.InferenceEngine.TensorShape(1, phonemeIds.Length),
+                        phonemeIds);
+                using var inputLengthsTensor =
+                    new Unity.InferenceEngine.Tensor<int>(new Unity.InferenceEngine.TensorShape(1),
+                        new int[] { phonemeIds.Length });
+                using var scalesTensor = new Unity.InferenceEngine.Tensor<float>(
+                    new Unity.InferenceEngine.TensorShape(3),
                     new float[] { scaleSpeed, scalePitch, scaleGlottal }
                 );
 
                 // 入力名をモデルに合わせる (たとえば 0=input, 1=input_lengths, 2=scales)
-                string inputName        = runtimeModel.inputs[0].name;
+                string inputName = runtimeModel.inputs[0].name;
                 string inputLengthsName = runtimeModel.inputs[1].name;
-                string scalesName       = runtimeModel.inputs[2].name;
+                string scalesName = runtimeModel.inputs[2].name;
 
-                worker.SetInput(inputName,         inputTensor);
-                worker.SetInput(inputLengthsName,  inputLengthsTensor);
-                worker.SetInput(scalesName,        scalesTensor);
+                worker.SetInput(inputName, inputTensor);
+                worker.SetInput(inputLengthsName, inputLengthsTensor);
+                worker.SetInput(scalesName, scalesTensor);
 
                 // スケジュール実行
                 worker.Schedule();
@@ -81,7 +85,8 @@ namespace Piper
                 }
 
                 // 4-2. 出力を取得
-                Tensor<float> outputTensor = worker.PeekOutput() as Tensor<float>;
+                Unity.InferenceEngine.Tensor<float> outputTensor =
+                    worker.PeekOutput() as Unity.InferenceEngine.Tensor<float>;
                 float[] sentenceSamples = outputTensor.DownloadToArray();
                 allSamples.AddRange(sentenceSamples);
             }
