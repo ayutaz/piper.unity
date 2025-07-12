@@ -1,6 +1,6 @@
 # piper.unity
 
-This is the Unity3d port of [Piper](https://github.com/rhasspy/piper) text-to-speech (TTS) library. It provides fast, local, and high-quality speech generation for multiple languages. Inference is done by using [Unity Sentis](https://docs.unity3d.com/Packages/com.unity.sentis@latest).
+This is the Unity3d port of [Piper](https://github.com/rhasspy/piper) text-to-speech (TTS) library. It provides fast, local, and high-quality speech generation for multiple languages. Inference is done by using **Unity AI Inference (formerly Sentis)**.
 
 Supports only Windows x86-64.
 
@@ -36,3 +36,11 @@ It uses [eSpeak NG](https://github.com/espeak-ng/espeak-ng) compiled libraries a
 It also uses [Piper Phonemization fork](https://github.com/Macoron/piper-phonemize) compiled library which is under MIT license.
 
 Models aren't included in this repository. Please contact the original model's creators to learn more about their licenses.
+
+## Changelog
+
+### 2025-07-12 – Migration to AI Inference 2.2
+* Package dependency `com.unity.sentis` → `com.unity.ai.inference@2.2.0-pre.1`
+* Removed obsolete `SentisBurstRegistrations.cs` and related meta files
+* Updated codebase references (kept `Unity.InferenceEngine` namespace)
+* Burst warnings about `CopyJob<T>` remain harmless; see issue in README Troubleshooting
