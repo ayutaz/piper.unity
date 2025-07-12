@@ -29,9 +29,8 @@ jobs:
       # Build the project for Windows 64-bit
       - name: Build project
         id: build
-        uses: game-ci/unity-builder@v2
+        uses: game-ci/unity-builder@v4
         with:
-          unityVersion: 6000.0.43f1
           targetPlatform: StandaloneWindows64
 
       # Upload the generated build as a workflow artifact
