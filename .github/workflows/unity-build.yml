@@ -31,6 +31,7 @@ jobs:
         uses: game-ci/unity-activate@v2
         with:
           unityVersion: 6000.0.43f1
+          license: ${{ secrets.UNITY_LICENSE }}
 
       # Build the project for Windows 64-bit
       - name: Build project
